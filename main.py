@@ -5,7 +5,7 @@ import torch
 
 app = FastAPI()
 
-MODEL_NAME = "HuggingFaceTB/SmolLM2-135M-Instruct"
+MODEL_NAME = "distilgpt2"
 
 tokenizer = None
 model = None
@@ -13,17 +13,19 @@ model = None
 def load_model():
     global tokenizer, model
     if model is None:
-        print("Carregando modelo...")
-        
+        print("🔄 Carregando modelo...")
+
         tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
-            torch_dtype=torch.float32
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True
         )
 
         model.eval()
-        print("Modelo carregado!")
+
+        print("✅ Modelo carregado!")
 
 class Message(BaseModel):
     text: str
@@ -36,11 +38,12 @@ def home():
 def chat(msg: Message):
     load_model()
 
+    # Prompt otimizado para DistilGPT2
     prompt = f"""
-Você é um assistente útil.
+Answer the question clearly and helpfully.
 
-Usuário: {msg.text}
-Assistente:
+Question: {msg.text}
+Answer:
 """
 
     inputs = tokenizer(prompt, return_tensors="pt")
@@ -48,12 +51,18 @@ Assistente:
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=80
+            max_new_tokens=80,
+            do_sample=True,
+            temperature=0.7,
+            top_k=50,
+            top_p=0.95,
+            pad_token_id=tokenizer.eos_token_id
         )
 
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     # limpa resposta
-    response = response.split("Assistente:")[-1].strip()
+    if "Answer:" in response:
+        response = response.split("Answer:")[-1].strip()
 
     return {"response": response}
