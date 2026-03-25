@@ -5,20 +5,25 @@ import torch
 
 app = FastAPI()
 
-MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
+MODEL_NAME = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
-print("Carregando modelo...")
+tokenizer = None
+model = None
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+def load_model():
+    global tokenizer, model
+    if model is None:
+        print("Carregando modelo...")
+        
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float32
-)
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float32
+        )
 
-model.eval()
-
-print("Modelo carregado!")
+        model.eval()
+        print("Modelo carregado!")
 
 class Message(BaseModel):
     text: str
@@ -29,6 +34,8 @@ def home():
 
 @app.post("/chat")
 def chat(msg: Message):
+    load_model()
+
     prompt = f"""
 Você é um assistente útil.
 
@@ -41,9 +48,12 @@ Assistente:
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=100
+            max_new_tokens=80
         )
 
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    # limpa resposta
+    response = response.split("Assistente:")[-1].strip()
 
     return {"response": response}
